@@ -18,9 +18,9 @@
 package subnet
 
 import (
-	jwtgo "github.com/golang-jwt/jwt"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/licverifier"
 )
 
 var (
@@ -49,23 +49,14 @@ type Config struct {
 	License string `json:"license"`
 }
 
-func validateLicenseFormat(lic string) error {
-	if len(lic) == 0 {
-		return nil
-	}
-
-	// Only verifying that the string is a parseable JWT token as of now
-	_, _, err := new(jwtgo.Parser).ParseUnverified(lic, jwtgo.MapClaims{})
-	return err
-}
-
 // LookupConfig - lookup config and override with valid environment settings if any.
-func LookupConfig(kvs config.KVS) (cfg Config, err error) {
+func LookupConfig(kvs config.KVS, depId string, devMode bool) (cfg Config, err error) {
 	if err = config.CheckValidKeys(config.SubnetSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
 
 	cfg.License = env.Get(config.EnvMinIOSubnetLicense, kvs.Get(config.License))
 
-	return cfg, validateLicenseFormat(cfg.License)
+	err = licverifier.VerifyClusterLicense(cfg.License, depId, devMode)
+	return cfg, err
 }

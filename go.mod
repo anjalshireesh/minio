@@ -50,7 +50,7 @@ require (
 	github.com/minio/madmin-go v1.1.10
 	github.com/minio/minio-go/v7 v7.0.15
 	github.com/minio/parquet-go v1.0.0
-	github.com/minio/pkg v1.1.5
+	github.com/minio/pkg v1.1.6-0.20211025132538-9cd0d53ddc30
 	github.com/minio/selfupdate v0.3.1
 	github.com/minio/sha256-simd v1.0.0
 	github.com/minio/simdjson-go v0.2.1
@@ -93,3 +93,5 @@ require (
 	gopkg.in/ini.v1 v1.63.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 )
+
+replace github.com/minio/pkg => ../pkg

@@ -249,6 +249,8 @@ func validateConfig(s config.Config) error {
 	// We must have a global lock for this so nobody else modifies env while we do.
 	defer env.LockSetEnv()()
 
+	devMode := env.Get("MINIO_CI_CD", "") != ""
+
 	// Disable merging env values with config for validation.
 	env.SetEnvOff()
 
@@ -346,6 +348,10 @@ func validateConfig(s config.Config) error {
 	}
 
 	if _, err := logger.LookupConfig(s); err != nil {
+		return err
+	}
+
+	if _, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalDeploymentID, devMode); err != nil {
 		return err
 	}
 
@@ -521,7 +527,8 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err))
 	}
 
-	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default])
+	devMode := env.Get("MINIO_CI_CD", "") != ""
+	globalSubnetConfig, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalDeploymentID, devMode)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 	}
