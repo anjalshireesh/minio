@@ -238,6 +238,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 			adminRouter.Methods(http.MethodGet).Path(adminVersion + "/bandwidth").
 				HandlerFunc(gz(httpTraceHdrs(adminAPI.BandwidthMonitorHandler)))
 		}
+
+		// subnet related
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/get-subnet-license").HandlerFunc(gz(httpTraceHdrs(adminAPI.GetSubnetLicenseHandler)))
 	}
 
 	// If none of the routes match add default error handler routes
