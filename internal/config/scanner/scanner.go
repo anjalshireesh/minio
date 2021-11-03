@@ -88,6 +88,14 @@ var (
 	}
 )
 
+func getConfigVal(kvs config.KVS, key string) string {
+	v := kvs.Get(key)
+	if len(v) == 0 {
+		return DefaultKVS.Get(key)
+	}
+	return v
+}
+
 // LookupConfig - lookup config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err = config.CheckValidKeys(config.ScannerSubSys, kvs, DefaultKVS); err != nil {
@@ -95,7 +103,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 	delay := env.Get(EnvDelayLegacy, "")
 	if delay == "" {
-		delay = env.Get(EnvDelay, kvs.Get(Delay))
+		delay = env.Get(EnvDelay, getConfigVal(kvs, Delay))
 	}
 	cfg.Delay, err = strconv.ParseFloat(delay, 64)
 	if err != nil {
@@ -103,14 +111,14 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 	maxWait := env.Get(EnvMaxWaitLegacy, "")
 	if maxWait == "" {
-		maxWait = env.Get(EnvMaxWait, kvs.Get(MaxWait))
+		maxWait = env.Get(EnvMaxWait, getConfigVal(kvs, MaxWait))
 	}
 	cfg.MaxWait, err = time.ParseDuration(maxWait)
 	if err != nil {
 		return cfg, err
 	}
 
-	cfg.Cycle, err = time.ParseDuration(env.Get(EnvCycle, kvs.Get(Cycle)))
+	cfg.Cycle, err = time.ParseDuration(env.Get(EnvCycle, getConfigVal(kvs, Cycle)))
 	if err != nil {
 		return cfg, err
 	}

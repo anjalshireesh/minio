@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path"
 	"sort"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
 )
 
 const (
@@ -178,8 +180,13 @@ func readServerConfig(ctx context.Context, objAPI ObjectLayer) (config.Config, e
 		return nil, err
 	}
 
+	logger.Info("Inside readServerConfig")
+	fmt.Println("BEFORE Merge: global server config =", globalServerConfig["scanner"])
 	// Add any missing entries
-	return srvCfg.Merge(), nil
+	merged := srvCfg.Merge()
+	fmt.Println("AFTER Merge: global server config =", globalServerConfig["scanner"])
+
+	return merged, nil
 }
 
 // ConfigSys - config system.

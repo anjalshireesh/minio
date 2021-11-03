@@ -217,6 +217,12 @@ func (kvs KVS) Empty() bool {
 	return len(kvs) == 0
 }
 
+func (kvs KVS) Clone() KVS {
+	c := make(KVS, len(kvs))
+	copy(c, kvs)
+	return c
+}
+
 // Keys returns the list of keys for the current KVS
 func (kvs KVS) Keys() []string {
 	var keys = make([]string, len(kvs))
@@ -338,6 +344,21 @@ func (c Config) DelFrom(r io.Reader) error {
 	return scanner.Err()
 }
 
+func (c Config) PrintLicense(pfx string) {
+	ts, err := c.GetKVS("subnet", DefaultKVS)
+	if err == nil {
+		for _, t := range ts {
+			v := t.KVS.Get("license")
+			if t.KVS.Empty() {
+				fmt.Println(pfx + ": " + "license is empty")
+
+			} else {
+				fmt.Println(pfx+": "+"license = ", v)
+			}
+		}
+	}
+}
+
 // ReadConfig - read content from input and write into c.
 // Returns whether all parameters were dynamic.
 func (c Config) ReadConfig(r io.Reader) (dynOnly bool, err error) {
@@ -350,7 +371,9 @@ func (c Config) ReadConfig(r io.Reader) (dynOnly bool, err error) {
 		if text == "" || strings.HasPrefix(text, KvComment) {
 			continue
 		}
+		fmt.Println("Inside ReadConfig: before SetKVS, DefaultKVS =", DefaultKVS["scanner"])
 		dynamic, err := c.SetKVS(text, DefaultKVS)
+		fmt.Println("Inside ReadConfig: after SetKVS, DefaultKVS =", DefaultKVS["scanner"])
 		if err != nil {
 			return false, err
 		}
@@ -678,6 +701,7 @@ func (c Config) DelKVS(s string) error {
 	if !ok {
 		return Errorf("sub-system %s already deleted", s)
 	}
+
 	delete(c[subSys], tgt)
 	return nil
 }
@@ -696,6 +720,8 @@ func (c Config) Clone() Config {
 
 // SetKVS - set specific key values per sub-system.
 func (c Config) SetKVS(s string, defaultKVS map[string]KVS) (dynamic bool, err error) {
+	// FIXME: This is the culprit. This is where DefaultKVS is getting updated with license being set
+	fmt.Println("Inside SetKVS: DefaultKVS =", DefaultKVS["scanner"])
 	if len(s) == 0 {
 		return false, Errorf("input arguments cannot be empty")
 	}
@@ -759,16 +785,25 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) (dynamic bool, err e
 		kvs.Set(Enable, EnableOn)
 	}
 
-	currKVS, ok := c[subSys][tgt]
+	// TODO: Check if these are same
+	// isSame := &c["subnet"]["_"][0] == &defaultKVS["subnet"][0]
+	var currKVS KVS
+	ck, ok := c[subSys][tgt]
 	if !ok {
-		currKVS = defaultKVS[subSys]
+		// SHIREESH: Here lies the solution!
+		currKVS = defaultKVS[subSys].Clone()
+		fmt.Println("After cloning defaultKVS for subsys", subSys)
 	} else {
+		// SHIREESH: Here lies the solution!
+		currKVS = ck.Clone()
 		for _, kv := range defaultKVS[subSys] {
 			if _, ok = currKVS.Lookup(kv.Key); !ok {
 				currKVS.Set(kv.Key, kv.Value)
 			}
 		}
 	}
+
+	fmt.Println("Inside SetKVS: 1 -> DefaultKVS =", DefaultKVS["scanner"])
 
 	for _, kv := range kvs {
 		if kv.Key == Comment {
@@ -777,6 +812,8 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) (dynamic bool, err e
 		}
 		currKVS.Set(kv.Key, kv.Value)
 	}
+
+	fmt.Println("Inside SetKVS: 2 -> DefaultKVS =", DefaultKVS["scanner"])
 
 	v, ok := kvs.Lookup(Comment)
 	if ok {

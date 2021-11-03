@@ -19,9 +19,12 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -33,6 +36,7 @@ import (
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/config/policy/opa"
+	"github.com/minio/minio/internal/config/scanner"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
@@ -43,6 +47,7 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	ctx := newContext(r, w, "DeleteConfigKV")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+	logger.Info("Inside DelConfigKVHandler, scanner.DefaultKVS = %v", scanner.DefaultKVS)
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
@@ -69,6 +74,7 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	fmt.Println("BEFORE DelFrom: global server config =", globalServerConfig["scanner"])
 	if err = cfg.DelFrom(bytes.NewReader(kvBytes)); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -78,6 +84,33 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+
+	kvStr := string(kvBytes)
+	dynamic := config.SubSystemsDynamic.Contains(kvStr)
+	if dynamic {
+		if err = globalServerConfig.DelFrom(bytes.NewReader(kvBytes)); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		fmt.Println("AFTER DelFrom: global server config =", globalServerConfig["scanner"])
+		logger.Info("Inside DelConfigKVHandler, before applying dynamic, scanner.DefaultKVS = %v", scanner.DefaultKVS)
+		applyDynamic(objectAPI, cfg, ctx, w, r.URL)
+		// Apply dynamic values.
+		if err := applyDynamicConfig(GlobalContext, objectAPI, cfg); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		globalNotificationSys.SignalService(serviceReloadDynamic)
+		// Tell the client that dynamic config was applied.
+		w.Header().Set(madmin.ConfigAppliedHeader, madmin.ConfigAppliedTrue)
+	}
+
+	logger.Info("Inside DelConfigKVHandler, after applying dynamic, scanner.DefaultKVS = %v, global KVs = %v", scanner.DefaultKVS, globalServerConfig["scanner"])
+
+	writeSuccessResponseHeadersOnly(w)
+}
+
+func applyDynamic(objectAPI ObjectLayer, cfg config.Config, ctx context.Context, w http.ResponseWriter, reqURL *url.URL) {
 }
 
 // SetConfigKVHandler - PUT /minio/admin/v3/set-config-kv
@@ -111,11 +144,15 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	logger.Info("Inside SetConfigKVHandler, before ReadConfig")
+	fmt.Println("BEFORE ReadConfig: global server config =", globalServerConfig["scanner"], "DefaultKVS =", config.DefaultKVS["scanner"])
 	dynamic, err := cfg.ReadConfig(bytes.NewReader(kvBytes))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+	fmt.Println("AFTER ReadConfig: global server config =", globalServerConfig["scanner"], "DefaultKVS =", config.DefaultKVS["scanner"])
+	//logger.Info("Inside SetConfigKVHandler, after ReadConfig, subnet.DefaultKVS = %v, DefaultKVS[subnet]= %v", subnet.DefaultKVS, config.DefaultKVS["subnet"])
 
 	if err = validateConfig(cfg); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
@@ -151,6 +188,8 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "GetConfigKV")
 
+	fmt.Println("Inside GetConfigKVHandler: global server config =", globalServerConfig["scanner"], "DefaultKVS =", config.DefaultKVS["scanner"])
+
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
@@ -166,6 +205,8 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+	fmt.Println("retrieved cw =", string(buf.Bytes()))
+	fmt.Println("after retrieval, global server config =", globalServerConfig["scanner"], "DefaultKVS =", config.DefaultKVS["scanner"])
 
 	password := cred.SecretKey
 	econfigData, err := madmin.EncryptData(password, buf.Bytes())

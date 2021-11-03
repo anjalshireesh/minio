@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
 	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/licverifier"
 )
 
 // GetSubnetLicenseHandler - DELETE /minio/admin/v3/del-config-kv
@@ -41,7 +43,6 @@ func (a adminAPIHandlers) GetSubnetLicenseHandler(w http.ResponseWriter, r *http
 
 	cfg := globalServerConfig.Clone()
 	var buf = &bytes.Buffer{}
-	// cw := config.NewConfigWriteTo(cfg, config.License)
 	cw := config.NewConfigWriteTo(cfg, config.SubnetSubSys)
 	if _, err := cw.WriteTo(buf); err != nil {
 		fmt.Println("Error in getting config: ", err.Error())
@@ -49,11 +50,21 @@ func (a adminAPIHandlers) GetSubnetLicenseHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	password := cred.SecretKey
-	d := buf.Bytes()
-	econfigData, err := madmin.EncryptData(password, d)
+	lic, err := licverifier.VerifyClusterLicense(string(buf.Bytes()), globalDeploymentID, true)
 	if err != nil {
-		fmt.Println("Error in encrypting data: ", err.Error())
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	data, err := json.Marshal(lic)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	password := cred.SecretKey
+	econfigData, err := madmin.EncryptData(password, data)
+	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

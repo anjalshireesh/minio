@@ -65,8 +65,8 @@ func initHelp() {
 		config.AuditWebhookSubSys:   logger.DefaultAuditWebhookKVS,
 		config.AuditKafkaSubSys:     logger.DefaultAuditKafkaKVS,
 		config.HealSubSys:           heal.DefaultKVS,
-		config.ScannerSubSys:        scanner.DefaultKVS,
-		config.SubnetSubSys:         subnet.DefaultKVS,
+		config.ScannerSubSys:        scanner.DefaultKVS.Clone(),
+		config.SubnetSubSys:         subnet.DefaultKVS.Clone(),
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -630,6 +630,15 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 		return fmt.Errorf("Unable to apply scanner config: %w", err)
 	}
 
+	// subnet
+	devMode := env.Get("MINIO_CI_CD", "") != ""
+	subnetCfg, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalDeploymentID, devMode)
+	if err != nil {
+		return fmt.Errorf("Unable to apply subnet config: %w", err)
+	}
+	globalSubnetConfig.Update(subnetCfg)
+	globalSubnetConfig = subnetCfg
+
 	// Apply configurations.
 	// We should not fail after this.
 	var setDriveCounts []int
@@ -656,6 +665,7 @@ func applyDynamicConfig(ctx context.Context, objAPI ObjectLayer, s config.Config
 			globalServerConfig[k] = s[k]
 		}
 	}
+
 	return nil
 }
 

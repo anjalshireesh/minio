@@ -19,6 +19,7 @@ package subnet
 
 import (
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/env"
 	"github.com/minio/pkg/licverifier"
 )
@@ -57,6 +58,18 @@ func LookupConfig(kvs config.KVS, depId string, devMode bool) (cfg Config, err e
 
 	cfg.License = env.Get(config.EnvMinIOSubnetLicense, kvs.Get(config.License))
 
-	err = licverifier.VerifyClusterLicense(cfg.License, depId, devMode)
+	if len(cfg.License) > 0 {
+		_, err = licverifier.VerifyClusterLicense(cfg.License, depId, devMode)
+		if err != nil {
+			logger.Info("Inside LookupConfig. Error = %s", err.Error())
+		}
+	}
 	return cfg, err
+}
+
+// Update - updates opts with nopts
+func (opts *Config) Update(nopts Config) {
+	DefaultKVS.Set("license", nopts.License)
+	opts.License = nopts.License
+	logger.Info("Inside subnet.Update. new license = %s, DefaultKVS= %v", nopts.License, DefaultKVS)
 }
