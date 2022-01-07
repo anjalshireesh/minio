@@ -934,8 +934,10 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 	reqInfo := logger.GetReqInfo(ctx)
 	var newReqInfo *logger.ReqInfo
 	if reqInfo != nil {
+		fmt.Println("-----------inside HealObject. requestID =", reqInfo.RequestID)
 		newReqInfo = logger.NewReqInfo(reqInfo.RemoteHost, reqInfo.UserAgent, reqInfo.DeploymentID, reqInfo.RequestID, reqInfo.API, bucket, object)
 	} else {
+		fmt.Println("-----------inside HealObject. No requestID-----------------")
 		newReqInfo = logger.NewReqInfo("", "", globalDeploymentID, "", "Heal", bucket, object)
 	}
 	healCtx := logger.SetReqInfo(GlobalContext, newReqInfo)

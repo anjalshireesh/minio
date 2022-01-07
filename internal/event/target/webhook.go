@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/certs"
 	xnet "github.com/minio/pkg/net"
 )
@@ -149,6 +150,8 @@ func (target *WebhookTarget) Save(eventData event.Event) error {
 
 // send - sends an event to the webhook.
 func (target *WebhookTarget) send(eventData event.Event) error {
+	logger.Info("Target = %s", target.ID().Name)
+	logger.Info("eventData = %v", eventData)
 	objectName, err := url.QueryUnescape(eventData.S3.Object.Key)
 	if err != nil {
 		return err
@@ -172,8 +175,10 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 	tokens := strings.Fields(target.args.AuthToken)
 	switch len(tokens) {
 	case 2:
+		fmt.Println("Sending Authorization header AS IS")
 		req.Header.Set("Authorization", target.args.AuthToken)
 	case 1:
+		fmt.Println("Adding Bearer to Authorization header")
 		req.Header.Set("Authorization", "Bearer "+target.args.AuthToken)
 	}
 

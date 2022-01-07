@@ -18,6 +18,7 @@
 package logger
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -46,6 +47,7 @@ var (
 // Targets returns active targets.
 // Returned slice may not be modified in any way.
 func Targets() []Target {
+	fmt.Println("Inside Targets(). nTargets =", nTargets, "len(targets) =", len(targets), "targets =", targets)
 	if atomic.LoadInt32(&nTargets) == 0 {
 		// Lock free if none...
 		return nil

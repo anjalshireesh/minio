@@ -59,6 +59,9 @@ type ReqInfo struct {
 
 // NewReqInfo :
 func NewReqInfo(remoteHost, userAgent, deploymentID, requestID, api, bucket, object string) *ReqInfo {
+	if requestID == "" {
+		fmt.Println("---------request id is empty in NewReqInfo")
+	}
 	return &ReqInfo{
 		RemoteHost:   remoteHost,
 		UserAgent:    userAgent,

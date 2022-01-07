@@ -269,6 +269,9 @@ func LogAlwaysIf(ctx context.Context, err error, errKind ...interface{}) {
 // the execution of the server, if it is not an
 // ignored error.
 func LogIf(ctx context.Context, err error, errKind ...interface{}) {
+	if err != nil {
+		fmt.Println("Inside LogIf for error", err.Error())
+	}
 	if err == nil {
 		return
 	}
@@ -287,6 +290,7 @@ func LogIf(ctx context.Context, err error, errKind ...interface{}) {
 // logIf prints a detailed error message during
 // the execution of the server.
 func logIf(ctx context.Context, err error, errKind ...interface{}) {
+	fmt.Println("Inside logIf for error", err.Error())
 	if Disable {
 		return
 	}
@@ -330,6 +334,9 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 		})
 	}
 
+	if req.RequestID == "" {
+		fmt.Println("---------request id is empty in logIf")
+	}
 	entry := log.Entry{
 		DeploymentID: req.DeploymentID,
 		Level:        ErrorLvl.String(),
@@ -364,7 +371,9 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	}
 
 	// Iterate over all logger targets to send the log entry
-	for _, t := range Targets() {
+	fmt.Println("Trying to send the log entry to all targets")
+	for i, t := range Targets() {
+		fmt.Println(i, "-", t.Endpoint(), "-", entry.RequestID)
 		if err := t.Send(entry, entry.LogKind); err != nil {
 			LogAlwaysIf(context.Background(), fmt.Errorf("event(%v) was not sent to Logger target (%v): %v", entry, t, err), entry.LogKind)
 		}

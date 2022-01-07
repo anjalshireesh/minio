@@ -21,6 +21,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -159,7 +161,11 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 
 // GetConfigKVHandler - GET /minio/admin/v3/get-config-kv?key={key}
 func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Inside config get - Println")
+	logger.Info("Inside config get - Info")
+
 	ctx := newContext(r, w, "GetConfigKV")
+	logger.LogIf(ctx, errors.New("Inside Config Get - LogIf"))
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 

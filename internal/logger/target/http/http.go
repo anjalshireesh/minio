@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -72,6 +73,7 @@ func (h *Target) String() string {
 
 // Init validate and initialize the http target
 func (h *Target) Init() error {
+	fmt.Println("Inside http Init (fmt)")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*webhookCallTimeout)
 	defer cancel()
 
@@ -105,6 +107,9 @@ func (h *Target) Init() error {
 			return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set",
 				h.config.Endpoint, resp.Status)
 		}
+		body, _ := ioutil.ReadAll(req.Body)
+		fmt.Println("request body was", body)
+		fmt.Println("request auth header was", req.Header.Get("Authorization"))
 		return fmt.Errorf("%s returned '%s', please check your endpoint configuration",
 			h.config.Endpoint, resp.Status)
 	}
@@ -130,11 +135,14 @@ func (h *Target) startHTTPLogger() {
 				continue
 			}
 
+			fmt.Println("-------------------------------------")
+			fmt.Println(string(logJSON))
+
 			ctx, cancel := context.WithTimeout(context.Background(), webhookCallTimeout)
 			req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 				h.config.Endpoint, bytes.NewReader(logJSON))
 			if err != nil {
-				h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
+				h.config.LogOnce(ctx, fmt.Errorf("1 - %s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
 				cancel()
 				continue
 			}
@@ -148,25 +156,38 @@ func (h *Target) startHTTPLogger() {
 				req.Header.Set("Authorization", h.config.AuthToken)
 			}
 
+			authH := req.Header.Get(("Authorization"))
+			fmt.Println("Authorization header =", authH)
+			fmt.Println("-------------------------------------")
+
 			client := http.Client{Transport: h.config.Transport}
 			resp, err := client.Do(req)
 			cancel()
 			if err != nil {
-				h.config.LogOnce(ctx, fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
+				h.config.LogOnce(ctx, fmt.Errorf("2 - %s returned '%w', please check your endpoint configuration", h.config.Endpoint, err), h.config.Endpoint)
 				continue
+			}
+
+			if !acceptedResponseStatusCode(resp.StatusCode) {
+				switch resp.StatusCode {
+				case http.StatusForbidden:
+					h.config.LogOnce(ctx, fmt.Errorf("3 - %s returned '%s', please check if your auth token is correctly set", h.config.Endpoint, resp.Status), h.config.Endpoint)
+				default:
+					var d []byte
+					d, e := ioutil.ReadAll(resp.Body)
+					msg := ""
+					if e != nil {
+						msg = e.Error()
+					} else {
+						msg = string(d)
+					}
+					h.config.LogOnce(ctx, fmt.Errorf("4 - %s returned '%s - %s', please check your endpoint configuration", h.config.Endpoint, resp.Status, msg), h.config.Endpoint)
+				}
 			}
 
 			// Drain any response.
 			xhttp.DrainBody(resp.Body)
 
-			if !acceptedResponseStatusCode(resp.StatusCode) {
-				switch resp.StatusCode {
-				case http.StatusForbidden:
-					h.config.LogOnce(ctx, fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.config.Endpoint, resp.Status), h.config.Endpoint)
-				default:
-					h.config.LogOnce(ctx, fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.config.Endpoint, resp.Status), h.config.Endpoint)
-				}
-			}
 		}
 	}()
 }
@@ -184,6 +205,7 @@ func New(config Config) *Target {
 
 // Send log message 'e' to http target.
 func (h *Target) Send(entry interface{}, errKind string) error {
+	fmt.Println("Inside HTTP Send. Entry =", entry)
 	select {
 	case h.logCh <- entry:
 	default:

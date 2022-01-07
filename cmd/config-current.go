@@ -552,6 +552,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 			l.UserAgent = loggerUserAgent
 			l.Transport = NewGatewayHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			// Enable http logging
+			fmt.Println("Enabling http logging")
 			if err = logger.AddTarget(http.New(l)); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Unable to initialize server logger HTTP target: %w", err))
 			}
