@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -489,6 +490,9 @@ func (s *peerRESTServer) GetSysConfigHandler(w http.ResponseWriter, r *http.Requ
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+
+	d := time.Duration(rand.Intn(60)) * time.Second
+	time.Sleep(d)
 
 	info := madmin.GetSysConfig(ctx, r.Host)
 
