@@ -255,65 +255,55 @@ var (
 	globalServerConfigMu sync.RWMutex
 )
 
-func validateConfig(s config.Config) error {
-	objAPI := newObjectLayerFn()
-
-	// We must have a global lock for this so nobody else modifies env while we do.
-	defer env.LockSetEnv()()
-
-	// Disable merging env values with config for validation.
-	env.SetEnvOff()
-
-	// Enable env values to validate KMS.
-	defer env.SetEnvOn()
-
-	if _, err := config.LookupCreds(s[config.CredentialsSubSys][config.Default]); err != nil {
-		return err
-	}
-
-	if _, err := config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default]); err != nil {
-		return err
-	}
-
-	if _, err := api.LookupConfig(s[config.APISubSys][config.Default]); err != nil {
-		return err
-	}
-
-	if globalIsErasure {
-		if objAPI == nil {
-			return errServerNotInitialized
+func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) error {
+	switch subSys {
+	case config.CredentialsSubSys:
+		if _, err := config.LookupCreds(s[config.CredentialsSubSys][config.Default]); err != nil {
+			return err
 		}
-		for _, setDriveCount := range objAPI.SetDriveCounts() {
-			if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount); err != nil {
-				return err
+	case config.SiteSubSys:
+		if _, err := config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default]); err != nil {
+			return err
+		}
+	case config.APISubSys:
+		if _, err := api.LookupConfig(s[config.APISubSys][config.Default]); err != nil {
+			return err
+		}
+	case config.StorageClassSubSys:
+		if globalIsErasure {
+			if objAPI == nil {
+				return errServerNotInitialized
+			}
+			for _, setDriveCount := range objAPI.SetDriveCounts() {
+				if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount); err != nil {
+					return err
+				}
 			}
 		}
-	}
-
-	if _, err := cache.LookupConfig(s[config.CacheSubSys][config.Default]); err != nil {
-		return err
-	}
-
-	compCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
-	if err != nil {
-		return err
-	}
-
-	if objAPI != nil {
-		if compCfg.Enabled && !objAPI.IsCompressionSupported() {
-			return fmt.Errorf("Backend does not support compression")
+	case config.CacheSubSys:
+		if _, err := cache.LookupConfig(s[config.CacheSubSys][config.Default]); err != nil {
+			return err
 		}
-	}
+	case config.CompressionSubSys:
+		compCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
+		if err != nil {
+			return err
+		}
 
-	if _, err = heal.LookupConfig(s[config.HealSubSys][config.Default]); err != nil {
-		return err
-	}
-
-	if _, err = scanner.LookupConfig(s[config.ScannerSubSys][config.Default]); err != nil {
-		return err
-	}
-
-	{
+		if objAPI != nil {
+			if compCfg.Enabled && !objAPI.IsCompressionSupported() {
+				return fmt.Errorf("Backend does not support compression")
+			}
+		}
+	case config.HealSubSys:
+		if _, err := heal.LookupConfig(s[config.HealSubSys][config.Default]); err != nil {
+			return err
+		}
+	case config.ScannerSubSys:
+		if _, err := scanner.LookupConfig(s[config.ScannerSubSys][config.Default]); err != nil {
+			return err
+		}
+	case config.EtcdSubSys:
 		etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 		if err != nil {
 			return err
@@ -325,13 +315,12 @@ func validateConfig(s config.Config) error {
 			}
 			etcdClnt.Close()
 		}
-	}
-	if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
-		NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
-		return err
-	}
-
-	{
+	case config.IdentityOpenIDSubSys:
+		if _, err := openid.LookupConfig(s[config.IdentityOpenIDSubSys][config.Default],
+			NewGatewayHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
+			return err
+		}
+	case config.IdentityLDAPSubSys:
 		cfg, err := xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
 			globalRootCAs)
 		if err != nil {
@@ -344,11 +333,40 @@ func validateConfig(s config.Config) error {
 			}
 			conn.Close()
 		}
-	}
-	{
+	case config.IdentityTLSSubSys:
 		_, err := xtls.Lookup(s[config.IdentityTLSSubSys][config.Default])
 		if err != nil {
 			return err
+		}
+	case config.SubnetSubSys:
+		if _, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateConfig(s config.Config, subSys string) error {
+	objAPI := newObjectLayerFn()
+
+	// We must have a global lock for this so nobody else modifies env while we do.
+	defer env.LockSetEnv()()
+
+	// Disable merging env values with config for validation.
+	env.SetEnvOff()
+
+	// Enable env values to validate KMS.
+	defer env.SetEnvOn()
+
+	if subSys != "" {
+		return validateSubSysConfig(s, subSys, objAPI)
+	}
+
+	for _, ss := range config.SubSystems.ToSlice() {
+		e := validateSubSysConfig(s, ss, objAPI)
+		if e != nil {
+			return e
 		}
 	}
 
@@ -357,11 +375,9 @@ func validateConfig(s config.Config) error {
 		return err
 	}
 
+	// This currently validates multiple subsystems
+	// viz. logger webhook, audit webhook and audit kafka
 	if _, err := logger.LookupConfig(s); err != nil {
-		return err
-	}
-
-	if _, err = subnet.LookupConfig(s[config.SubnetSubSys][config.Default]); err != nil {
 		return err
 	}
 

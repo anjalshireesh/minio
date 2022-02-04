@@ -784,34 +784,45 @@ func (c Config) Clone() Config {
 	return cp
 }
 
-// SetKVS - set specific key values per sub-system.
-func (c Config) SetKVS(s string, defaultKVS map[string]KVS) (dynamic bool, err error) {
+// GetSubSys - extracts subssystem info from given config string
+func GetSubSys(s string) (subSys string, inputs []string, tgt string, e error) {
+	tgt = Default
 	if len(s) == 0 {
-		return false, Errorf("input arguments cannot be empty")
+		return subSys, inputs, tgt, Errorf("input arguments cannot be empty")
 	}
-	inputs := strings.SplitN(s, KvSpaceSeparator, 2)
+	inputs = strings.SplitN(s, KvSpaceSeparator, 2)
 	if len(inputs) <= 1 {
-		return false, Errorf("invalid number of arguments '%s'", s)
+		return subSys, inputs, tgt, Errorf("invalid number of arguments '%s'", s)
 	}
 	subSystemValue := strings.SplitN(inputs[0], SubSystemSeparator, 2)
 	if len(subSystemValue) == 0 {
-		return false, Errorf("invalid number of arguments %s", s)
+		return subSys, inputs, tgt, Errorf("invalid number of arguments %s", s)
 	}
 
 	if !SubSystems.Contains(subSystemValue[0]) {
-		return false, Errorf("unknown sub-system %s", s)
+		return subSys, inputs, tgt, Errorf("unknown sub-system %s", s)
 	}
+	subSys = subSystemValue[0]
 
 	if SubSystemsSingleTargets.Contains(subSystemValue[0]) && len(subSystemValue) == 2 {
-		return false, Errorf("sub-system '%s' only supports single target", subSystemValue[0])
+		return subSys, inputs, tgt, Errorf("sub-system '%s' only supports single target", subSystemValue[0])
 	}
-	dynamic = SubSystemsDynamic.Contains(subSystemValue[0])
 
-	tgt := Default
-	subSys := subSystemValue[0]
 	if len(subSystemValue) == 2 {
 		tgt = subSystemValue[1]
 	}
+
+	return subSys, inputs, tgt, e
+}
+
+// SetKVS - set specific key values per sub-system.
+func (c Config) SetKVS(s string, defaultKVS map[string]KVS) (dynamic bool, err error) {
+	subSys, inputs, tgt, err := GetSubSys(s)
+	if err != nil {
+		return false, err
+	}
+
+	dynamic = SubSystemsDynamic.Contains(subSys)
 
 	fields := madmin.KvFields(inputs[1], defaultKVS[subSys].Keys())
 	if len(fields) == 0 {
