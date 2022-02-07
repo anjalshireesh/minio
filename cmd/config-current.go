@@ -342,12 +342,18 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		if _, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default]); err != nil {
 			return err
 		}
+	case config.PolicyOPASubSys:
+		if _, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
+			NewGatewayHTTPTransport(), xhttp.DrainBody); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 func validateConfig(s config.Config, subSys string) error {
+	fmt.Println("Inside validateConfig for", subSys)
 	objAPI := newObjectLayerFn()
 
 	// We must have a global lock for this so nobody else modifies env while we do.
@@ -358,9 +364,13 @@ func validateConfig(s config.Config, subSys string) error {
 
 	// Enable env values to validate KMS.
 	defer env.SetEnvOn()
-
 	if subSys != "" {
-		return validateSubSysConfig(s, subSys, objAPI)
+		if err := validateSubSysConfig(s, subSys, objAPI); err != nil {
+			return err
+		}
+		if config.NotifySubSystems.Contains(subSys) {
+			return notify.TestSubSysNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs(), subSys)
+		}
 	}
 
 	for _, ss := range config.SubSystems.ToSlice() {
@@ -368,11 +378,6 @@ func validateConfig(s config.Config, subSys string) error {
 		if e != nil {
 			return e
 		}
-	}
-
-	if _, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
-		NewGatewayHTTPTransport(), xhttp.DrainBody); err != nil {
-		return err
 	}
 
 	// This currently validates multiple subsystems

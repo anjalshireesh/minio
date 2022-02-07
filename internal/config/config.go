@@ -106,6 +106,19 @@ const (
 	// Add new constants here if you add new fields to config.
 )
 
+var NotifySubSystems = set.CreateStringSet(
+	NotifyKafkaSubSys,
+	NotifyMQTTSubSys,
+	NotifyMySQLSubSys,
+	NotifyNATSSubSys,
+	NotifyNSQSubSys,
+	NotifyESSubSys,
+	NotifyAMQPSubSys,
+	NotifyPostgresSubSys,
+	NotifyRedisSubSys,
+	NotifyWebhookSubSys,
+)
+
 // SubSystems - all supported sub-systems
 var SubSystems = set.CreateStringSet(
 	CredentialsSubSys,
