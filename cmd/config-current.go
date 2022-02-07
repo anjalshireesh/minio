@@ -321,8 +321,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			return err
 		}
 	case config.IdentityLDAPSubSys:
-		cfg, err := xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default],
-			globalRootCAs)
+		cfg, err := xldap.Lookup(s[config.IdentityLDAPSubSys][config.Default], globalRootCAs)
 		if err != nil {
 			return err
 		}
@@ -334,8 +333,7 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			conn.Close()
 		}
 	case config.IdentityTLSSubSys:
-		_, err := xtls.Lookup(s[config.IdentityTLSSubSys][config.Default])
-		if err != nil {
+		if _, err := xtls.Lookup(s[config.IdentityTLSSubSys][config.Default]); err != nil {
 			return err
 		}
 	case config.SubnetSubSys:
@@ -349,10 +347,23 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 		}
 	default:
 		if config.LoggerSubSystems.Contains(subSys) {
-			return logger.ValidateSubSysConfig(s, subSys)
+			if err := logger.ValidateSubSysConfig(s, subSys); err != nil {
+				return err
+			}
 		}
 	}
 
+	if config.LoggerSubSystems.Contains(subSys) {
+		if err := logger.ValidateSubSysConfig(s, subSys); err != nil {
+			return err
+		}
+	}
+
+	if config.NotifySubSystems.Contains(subSys) {
+		if err := notify.TestSubSysNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs(), subSys); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -368,30 +379,17 @@ func validateConfig(s config.Config, subSys string) error {
 	// Enable env values to validate KMS.
 	defer env.SetEnvOn()
 	if subSys != "" {
-		if err := validateSubSysConfig(s, subSys, objAPI); err != nil {
+		return validateSubSysConfig(s, subSys, objAPI)
+	}
+
+	// No sub-system passed. Validate all of them.
+	for _, ss := range config.SubSystems.ToSlice() {
+		if err := validateSubSysConfig(s, ss, objAPI); err != nil {
 			return err
 		}
-		if config.NotifySubSystems.Contains(subSys) {
-			err := notify.TestSubSysNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs(), subSys)
-			if err != nil {
-				return err
-			}
-		}
-		return logger.ValidateSubSysConfig(s, subSys)
 	}
 
-	for _, ss := range config.SubSystems.ToSlice() {
-		e := validateSubSysConfig(s, ss, objAPI)
-		if e != nil {
-			return e
-		}
-	}
-
-	if _, err := logger.LookupConfig(s); err != nil {
-		return err
-	}
-
-	return notify.TestNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs())
+	return nil
 }
 
 func lookupConfigs(s config.Config, objAPI ObjectLayer) {
