@@ -347,6 +347,10 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 			NewGatewayHTTPTransport(), xhttp.DrainBody); err != nil {
 			return err
 		}
+	default:
+		if config.LoggerSubSystems.Contains(subSys) {
+			return logger.ValidateSubSysConfig(s, subSys)
+		}
 	}
 
 	return nil

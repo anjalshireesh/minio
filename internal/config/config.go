@@ -119,6 +119,12 @@ var NotifySubSystems = set.CreateStringSet(
 	NotifyWebhookSubSys,
 )
 
+var LoggerSubSystems = set.CreateStringSet(
+	LoggerWebhookSubSys,
+	AuditWebhookSubSys,
+	AuditKafkaSubSys,
+)
+
 // SubSystems - all supported sub-systems
 var SubSystems = set.CreateStringSet(
 	CredentialsSubSys,
