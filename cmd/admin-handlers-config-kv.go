@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -104,7 +103,6 @@ func applyDynamic(ctx context.Context, objectAPI ObjectLayer, cfg config.Config,
 
 // SetConfigKVHandler - PUT /minio/admin/v3/set-config-kv
 func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Inside SetConfigHandler")
 	ctx := newContext(r, w, "SetConfigKV")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
@@ -128,7 +126,6 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	s := string(kvBytes)
-	fmt.Println("kvBytes = [", s, "]")
 
 	cfg, err := readServerConfig(ctx, objectAPI)
 	if err != nil {
@@ -142,19 +139,16 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	fmt.Println("About to validate config")
-	subSys, _, _, e := config.GetSubSys(s)
-	if e == nil {
-		fmt.Println("subSys =", subSys)
-	} else {
-		fmt.Println("Error in getting subsys: ", e.Error())
+	subSys, _, _, err := config.GetSubSys(s)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
 	}
 
 	if err = validateConfig(cfg, subSys); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), err.Error(), r.URL)
 		return
 	}
-	fmt.Println("AFTER validate config")
 
 	// Update the actual server config on disk.
 	if err = saveServerConfig(ctx, objectAPI, cfg); err != nil {

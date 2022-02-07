@@ -357,7 +357,6 @@ func validateSubSysConfig(s config.Config, subSys string, objAPI ObjectLayer) er
 }
 
 func validateConfig(s config.Config, subSys string) error {
-	fmt.Println("Inside validateConfig for", subSys)
 	objAPI := newObjectLayerFn()
 
 	// We must have a global lock for this so nobody else modifies env while we do.
@@ -370,16 +369,13 @@ func validateConfig(s config.Config, subSys string) error {
 	defer env.SetEnvOn()
 	if subSys != "" {
 		if err := validateSubSysConfig(s, subSys, objAPI); err != nil {
-			fmt.Println("Validation error: ", err.Error())
 			return err
 		}
 		if config.NotifySubSystems.Contains(subSys) {
-			fmt.Println("Testing notification targets for", subSys)
 			err := notify.TestSubSysNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs(), subSys)
 			if err != nil {
-				fmt.Println("Notifications error =", err.Error())
+				return err
 			}
-			return err
 		}
 		return logger.ValidateSubSysConfig(s, subSys)
 	}
