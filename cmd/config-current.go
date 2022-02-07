@@ -370,11 +370,18 @@ func validateConfig(s config.Config, subSys string) error {
 	defer env.SetEnvOn()
 	if subSys != "" {
 		if err := validateSubSysConfig(s, subSys, objAPI); err != nil {
+			fmt.Println("Validation error: ", err.Error())
 			return err
 		}
 		if config.NotifySubSystems.Contains(subSys) {
-			return notify.TestSubSysNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs(), subSys)
+			fmt.Println("Testing notification targets for", subSys)
+			err := notify.TestSubSysNotificationTargets(GlobalContext, s, NewGatewayHTTPTransport(), globalNotificationSys.ConfiguredTargetIDs(), subSys)
+			if err != nil {
+				fmt.Println("Notifications error =", err.Error())
+			}
+			return err
 		}
+		return logger.ValidateSubSysConfig(s, subSys)
 	}
 
 	for _, ss := range config.SubSystems.ToSlice() {
@@ -384,8 +391,6 @@ func validateConfig(s config.Config, subSys string) error {
 		}
 	}
 
-	// This currently validates multiple subsystems
-	// viz. logger webhook, audit webhook and audit kafka
 	if _, err := logger.LookupConfig(s); err != nil {
 		return err
 	}
