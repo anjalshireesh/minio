@@ -394,7 +394,7 @@ func GetAuditKafka(kafkaKVS map[string]config.KVS) (map[string]kafka.Config, err
 	return kafkaTargets, nil
 }
 
-func LookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
+func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 	envs := env.List(EnvLoggerWebhookEndpoint)
 	var loggerTargets []string
 	for _, k := range envs {
@@ -506,7 +506,7 @@ func LookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 	return cfg, nil
 }
 
-func LookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
+func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 	var loggerAuditTargets []string
 	envs := env.List(EnvAuditWebhookEndpoint)
 	for _, k := range envs {
@@ -626,20 +626,20 @@ func LookupConfig(scfg config.Config) (Config, error) {
 	}
 
 	for _, ss := range config.LoggerSubSystems.ToSlice() {
-		LookupConfigForSubSys(scfg, cfg, ss)
+		lookupConfigForSubSys(scfg, cfg, ss)
 	}
 
 	return cfg, nil
 }
 
-func LookupConfigForSubSys(scfg config.Config, cfg Config, subSys string) (Config, error) {
+func lookupConfigForSubSys(scfg config.Config, cfg Config, subSys string) (Config, error) {
 	switch subSys {
 	case config.LoggerWebhookSubSys:
-		if _, err := LookupLoggerWebhookConfig(scfg, cfg); err != nil {
+		if _, err := lookupLoggerWebhookConfig(scfg, cfg); err != nil {
 			return cfg, err
 		}
 	case config.AuditWebhookSubSys:
-		if _, err := LookupAuditWebhookConfig(scfg, cfg); err != nil {
+		if _, err := lookupAuditWebhookConfig(scfg, cfg); err != nil {
 			return cfg, err
 		}
 	case config.AuditKafkaSubSys:
@@ -650,12 +650,13 @@ func LookupConfigForSubSys(scfg config.Config, cfg Config, subSys string) (Confi
 	return cfg, nil
 }
 
+// ValidateSubSysConfig - validates logger related config of given sub-system
 func ValidateSubSysConfig(scfg config.Config, subSys string) error {
 	// Lookup for legacy environment variables first
 	cfg, err := lookupLegacyConfig()
 	if err != nil {
 		return err
 	}
-	_, err = LookupConfigForSubSys(scfg, cfg, subSys)
+	_, err = lookupConfigForSubSys(scfg, cfg, subSys)
 	return err
 }

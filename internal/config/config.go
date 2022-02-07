@@ -106,6 +106,7 @@ const (
 	// Add new constants here if you add new fields to config.
 )
 
+// NotifySubSystems - all notification sub-systems
 var NotifySubSystems = set.CreateStringSet(
 	NotifyKafkaSubSys,
 	NotifyMQTTSubSys,
@@ -119,6 +120,7 @@ var NotifySubSystems = set.CreateStringSet(
 	NotifyWebhookSubSys,
 )
 
+// LoggerSubSystems - all sub-systems related to logger
 var LoggerSubSystems = set.CreateStringSet(
 	LoggerWebhookSubSys,
 	AuditWebhookSubSys,
