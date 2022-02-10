@@ -20,6 +20,8 @@ package log
 import (
 	"strings"
 	"time"
+
+	"github.com/minio/pkg/subnet"
 )
 
 // ObjectVersion object version key/versionId
@@ -52,17 +54,18 @@ type API struct {
 
 // Entry - defines fields and values of each log entry.
 type Entry struct {
-	DeploymentID string    `json:"deploymentid,omitempty"`
-	Level        string    `json:"level"`
-	LogKind      string    `json:"errKind"`
-	Time         time.Time `json:"time"`
-	API          *API      `json:"api,omitempty"`
-	RemoteHost   string    `json:"remotehost,omitempty"`
-	Host         string    `json:"host,omitempty"`
-	RequestID    string    `json:"requestID,omitempty"`
-	UserAgent    string    `json:"userAgent,omitempty"`
-	Message      string    `json:"message,omitempty"`
-	Trace        *Trace    `json:"error,omitempty"`
+	DeploymentID string             `json:"deploymentid,omitempty"`
+	Level        string             `json:"level"`
+	LogKind      string             `json:"errKind"`
+	Time         time.Time          `json:"time"`
+	API          *API               `json:"api,omitempty"`
+	RemoteHost   string             `json:"remotehost,omitempty"`
+	Host         string             `json:"host,omitempty"`
+	RequestID    string             `json:"requestID,omitempty"`
+	UserAgent    string             `json:"userAgent,omitempty"`
+	Message      string             `json:"message,omitempty"`
+	Trace        *Trace             `json:"error,omitempty"`
+	ClusterInfo  subnet.ClusterInfo `json:"clusterInfo"`
 }
 
 // Info holds console log messages

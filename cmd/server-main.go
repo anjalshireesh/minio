@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/minio/cli"
+	"github.com/minio/madmin-go"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/color"
@@ -44,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/certs"
 	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/subnet"
 )
 
 // ServerFlags - server command specific flags
@@ -494,6 +496,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	logger.SetDeploymentID(globalDeploymentID)
+	logger.SetClusterInfo(getClusterInfo())
 
 	// Enable background operations for erasure coding
 	if globalIsErasure {
@@ -626,6 +629,50 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	<-globalOSSignalCh
+}
+
+func getClusterInfo() subnet.ClusterInfo {
+	admInfo := getServerInfo(GlobalContext, nil)
+	noOfPools := 1
+	noOfDrives := 0
+	noOfServers := 0
+	for _, srvr := range admInfo.Servers {
+		if srvr.PoolNumber > noOfPools {
+			noOfPools = srvr.PoolNumber
+		}
+		noOfDrives += len(srvr.Disks)
+		noOfServers++
+	}
+
+	totalSpace, usedSpace := getDriveSpaceInfo(admInfo)
+
+	return subnet.ClusterInfo{
+		DeploymentID:   globalDeploymentID,
+		DataUsage:      admInfo.Usage.Size,
+		SummaryVersion: subnet.CurrentSummaryVersion,
+		Summary: subnet.ClusterSummary{
+			MinioVersion:    Version,
+			NoOfServerPools: len(globalEndpoints),
+			NoOfServers:     noOfServers,
+			NoOfDrives:      noOfDrives,
+			NoOfBuckets:     admInfo.Buckets.Count,
+			NoOfObjects:     admInfo.Objects.Count,
+			TotalDriveSpace: totalSpace,
+			UsedDriveSpace:  usedSpace,
+		},
+	}
+}
+
+func getDriveSpaceInfo(admInfo madmin.InfoMessage) (uint64, uint64) {
+	total := uint64(0)
+	used := uint64(0)
+	for _, srvr := range admInfo.Servers {
+		for _, d := range srvr.Disks {
+			total += d.TotalSpace
+			used += d.UsedSpace
+		}
+	}
+	return total, used
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.

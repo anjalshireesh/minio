@@ -33,6 +33,7 @@ import (
 	"github.com/minio/highwayhash"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/logger/message/log"
+	"github.com/minio/pkg/subnet"
 )
 
 // HighwayHash key for logging in anonymous mode
@@ -54,6 +55,7 @@ const (
 var trimStrings []string
 
 var globalDeploymentID string
+var globalClusterInfo subnet.ClusterInfo
 
 // TimeFormat - logging time format.
 const TimeFormat string = "15:04:05 MST 01/02/2006"
@@ -133,6 +135,11 @@ func uniqueEntries(paths []string) []string {
 // SetDeploymentID -- Deployment Id from the main package is set here
 func SetDeploymentID(deploymentID string) {
 	globalDeploymentID = deploymentID
+}
+
+// SetClusterInfo -- Sets the cluster information
+func SetClusterInfo(info subnet.ClusterInfo) {
+	globalClusterInfo = info
 }
 
 // Init sets the trimStrings to possible GOPATHs
@@ -353,6 +360,7 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 			Source:    trace,
 			Variables: tags,
 		},
+		ClusterInfo: globalClusterInfo,
 	}
 
 	if anonFlag {
