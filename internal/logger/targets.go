@@ -40,22 +40,22 @@ var (
 	// swapMu must be held while reading slice info or swapping targets or auditTargets.
 	swapMu sync.Mutex
 
-	// targets is the set of enabled loggers.
+	// httpTargets is the set of enabled loggers.
 	// Must be immutable at all times.
 	// Can be swapped to another while holding swapMu
-	targets  = []Target{}
-	nTargets int32 // atomic count of len(targets)
+	httpTargets = []Target{}
+	nTargets    int32 // atomic count of len(targets)
 )
 
-// Targets returns active targets.
+// HttpTargets returns active targets.
 // Returned slice may not be modified in any way.
-func Targets() []Target {
+func HttpTargets() []Target {
 	if atomic.LoadInt32(&nTargets) == 0 {
 		// Lock free if none...
 		return nil
 	}
 	swapMu.Lock()
-	res := targets
+	res := httpTargets
 	swapMu.Unlock()
 	return res
 }
@@ -81,24 +81,24 @@ var (
 	nAuditTargets int32 // atomic count of len(auditTargets)
 )
 
-// AddTarget adds a new logger target to the
+// AddHttpTarget adds a new logger target to the
 // list of enabled loggers
-func AddTarget(t Target) error {
+func AddHttpTarget(t Target) error {
 	if err := t.Init(); err != nil {
 		return err
 	}
 	swapMu.Lock()
-	updated := append(make([]Target, 0, len(targets)+1), targets...)
+	updated := append(make([]Target, 0, len(httpTargets)+1), httpTargets...)
 	updated = append(updated, t)
-	targets = updated
+	httpTargets = updated
 	atomic.StoreInt32(&nTargets, int32(len(updated)))
 	swapMu.Unlock()
 
 	return nil
 }
 
-func cancelAllTargets() {
-	for _, tgt := range targets {
+func cancelAllHttpTargets() {
+	for _, tgt := range httpTargets {
 		tgt.Cancel()
 	}
 }
@@ -129,15 +129,15 @@ func initKafkaTargets(cfgMap map[string]kafka.Config) (tgts []Target, err error)
 	return tgts, err
 }
 
-// UpdateTargets swaps targets with newly loaded ones from the cfg
-func UpdateTargets(cfg Config) error {
+// UpdateHttpTargets swaps targets with newly loaded ones from the cfg
+func UpdateHttpTargets(cfg Config) error {
 	updated, err := initHttpTargets(cfg.HTTP)
 	if err != nil {
 		return err
 	}
 
 	swapMu.Lock()
-	for _, tgt := range targets {
+	for _, tgt := range httpTargets {
 		// Preserve console target when dynamically updating
 		// other HTTP targets, console target is always present.
 		if tgt.String() == ConsoleLoggerTgt {
@@ -146,8 +146,8 @@ func UpdateTargets(cfg Config) error {
 		}
 	}
 	atomic.StoreInt32(&nTargets, int32(len(updated)))
-	cancelAllTargets() // cancel running targets
-	targets = updated
+	cancelAllHttpTargets() // cancel running targets
+	httpTargets = updated
 	swapMu.Unlock()
 	return nil
 }
