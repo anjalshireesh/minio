@@ -34,6 +34,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/support"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/http"
 	xhttp "github.com/minio/minio/internal/http"
@@ -348,6 +349,17 @@ func (client *peerRESTClient) GetNetPerfInfo(ctx context.Context) (info madmin.P
 		return info, err
 	}
 	return info, err
+}
+
+// GetIOStats - Get IO stats
+func (client *peerRESTClient) GetIOStats(ctx context.Context) (stats support.IOStats, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodIOStats, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer http.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&stats)
+	return stats, err
 }
 
 // DispatchNetInfo - dispatch other nodes to run Net info.

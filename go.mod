@@ -99,3 +99,5 @@ require (
 	github.com/nats-io/nats-streaming-server v0.24.1 // indirect
 	github.com/xdg/stringprep v1.0.0 // indirect
 )
+
+replace github.com/minio/madmin-go => ../madmin-go

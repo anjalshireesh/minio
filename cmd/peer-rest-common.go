@@ -72,6 +72,7 @@ const (
 	peerRESTMethodGetLastDayTierStats         = "/getlastdaytierstats"
 	peerRESTMethodDevNull                     = "/devnull"
 	peerRESTMethodNetperf                     = "/netperf"
+	peerRESTMethodIOStats                     = "/iostats"
 )
 
 const (

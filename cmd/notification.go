@@ -35,6 +35,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go"
+	"github.com/minio/madmin-go/support"
 	"github.com/minio/minio-go/v7/pkg/set"
 	bucketBandwidth "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/crypto"
@@ -882,6 +883,24 @@ func (sys *NotificationSys) GetNetPerfInfo(ctx context.Context) madmin.NetPerfIn
 		NodeCommon:  madmin.NodeCommon{Addr: globalLocalNodeName},
 		RemotePeers: netInfos,
 	}
+}
+
+// GetIOStats - Get IO stats from the server
+func (sys *NotificationSys) GetIOStats(ctx context.Context) []support.IOStats {
+	iostats := []support.IOStats{}
+
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		iostat, err := sys.peerClients[index].GetIOStats(ctx)
+		if err != nil {
+			iostat.Addr = client.host.String()
+			iostat.Error = err.Error()
+		}
+		iostats = append(iostats, iostat)
+	}
+	return iostats
 }
 
 // DispatchNetPerfInfo - Net perf information from other nodes
