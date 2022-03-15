@@ -617,6 +617,10 @@ func serverMain(ctx *cli.Context) {
 			setCacheObjectLayer(cacheAPI)
 		}
 
+		// Initialize the callhome sub-system
+		// TODO: Consider making it into a sub-system e.g. BucketMetadataSys
+		initCallhome(GlobalContext, newObject)
+
 		// Prints the formatted startup message, if err is not nil then it prints additional information as well.
 		printStartupMessage(getAPIEndpoints(), err)
 	}()

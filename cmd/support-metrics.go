@@ -48,23 +48,7 @@ func (a adminAPIHandlers) SupportMetricsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	state, _ := getBackgroundHealStatus(ctx, newObjectLayerFn())
-
-	iostats := []support.IOStats{}
-	iostat := GetIOStats(ctx, globalLocalNodeName)
-	iostats = append(iostats, iostat)
-	peerIOStats := globalNotificationSys.GetIOStats(ctx)
-	for _, iostat = range peerIOStats {
-		iostats = append(iostats, iostat)
-	}
-
-	m := support.Metrics{
-		Version:     madmin.SupportMetricsVersion,
-		TimeStamp:   time.Now(),
-		BgHealState: state,
-		IOStats:     iostats,
-		TLSInfo:     getTLSInfo(),
-	}
+	m := GetSupportMetrics(ctx)
 
 	// Marshal API response
 	jsonBytes, err := json.Marshal(m)
@@ -76,6 +60,26 @@ func (a adminAPIHandlers) SupportMetricsHandler(w http.ResponseWriter, r *http.R
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+func GetSupportMetrics(ctx context.Context) support.Metrics {
+	state, _ := getBackgroundHealStatus(ctx, newObjectLayerFn())
+
+	iostats := []support.IOStats{}
+	iostat := GetIOStats(ctx, globalLocalNodeName)
+	iostats = append(iostats, iostat)
+	peerIOStats := globalNotificationSys.GetIOStats(ctx)
+	for _, iostat = range peerIOStats {
+		iostats = append(iostats, iostat)
+	}
+
+	return support.Metrics{
+		Version:     madmin.SupportMetricsVersion,
+		TimeStamp:   time.Now(),
+		BgHealState: state,
+		IOStats:     iostats,
+		TLSInfo:     getTLSInfo(),
+	}
 }
 
 func GetIOStats(ctx context.Context, addr string) support.IOStats {
