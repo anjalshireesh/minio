@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -33,6 +34,47 @@ import (
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/host"
 )
+
+func initMetrics() {
+	clusterMetricsGroups := []*MetricsGroup{
+		getBucketUsageMetrics(),
+		getMinioHealingMetrics(),
+		getNodeHealthMetrics(),
+		getClusterStorageMetrics(),
+		getClusterTierMetrics(),
+	}
+
+	peerMetricsGroups = []*MetricsGroup{
+		getCacheMetrics(),
+		getGoMetrics(),
+		getHTTPMetrics(),
+		getLocalStorageMetrics(),
+		getMinioProcMetrics(),
+		getMinioVersionMetrics(),
+		getNetworkMetrics(),
+		getS3TTFBMetric(),
+		getILMNodeMetrics(),
+		getScannerNodeMetrics(),
+	}
+
+	allMetricsGroups := func() (allMetrics []*MetricsGroup) {
+		allMetrics = append(allMetrics, clusterMetricsGroups...)
+		allMetrics = append(allMetrics, peerMetricsGroups...)
+		return allMetrics
+	}()
+
+	nodeCollector = newMinioCollectorNode([]*MetricsGroup{
+		getNodeHealthMetrics(),
+		getLocalDiskStorageMetrics(),
+		getCacheMetrics(),
+		getHTTPMetrics(),
+		getNetworkMetrics(),
+		getMinioVersionMetrics(),
+		getS3TTFBMetric(),
+	})
+
+	clusterCollector = newMinioClusterCollector(allMetricsGroups)
+}
 
 // SupportMetricsHandler - GET /minio/admin/v3/supportmetrics
 // ----------
@@ -48,7 +90,23 @@ func (a adminAPIHandlers) SupportMetricsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	m := GetSupportMetrics(ctx)
+	// m := GetSupportMetrics(ctx)
+	initMetrics()
+
+	peerCh := globalNotificationSys.GetClusterMetrics(GlobalContext)
+	selfCh := ReportMetrics(GlobalContext, clusterCollector.metricsGroups)
+
+	m := []Metric{}
+
+	for metric := range selfCh {
+		m = append(m, metric)
+	}
+
+	for metric := range peerCh {
+		m = append(m, metric)
+	}
+
+	fmt.Println("Length of metrics =", len(m))
 
 	// Marshal API response
 	jsonBytes, err := json.Marshal(m)
