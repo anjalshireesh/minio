@@ -102,7 +102,7 @@ func runCallhome(pctx context.Context, objAPI ObjectLayer) {
 }
 
 func performCallhome(ctx context.Context) {
-	m := GetSupportMetrics(ctx)
+	m := GetSupportMetrics()
 	resp, e := sendCallhomeMetrics(m)
 	if e != nil {
 		fmt.Println("Error from callhome: ", e.Error())

@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/mattn/go-ieproxy"
-	"github.com/minio/madmin-go/support"
 	"github.com/minio/minio/internal/config"
 )
 
@@ -142,7 +141,7 @@ func subnetCallhomeURL() string {
 	return subnetBaseURL() + "/api/support/metrics"
 }
 
-func sendCallhomeMetrics(metrics support.Metrics) (string, error) {
+func sendCallhomeMetrics(metrics []Metric) (string, error) {
 	apiKey, found := getSubnetConfig("api_key")
 	if !found {
 		return "", errors.New("Cluster is not registered with SUBNET.")

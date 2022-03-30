@@ -20,10 +20,8 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/minio/madmin-go"
 	"github.com/minio/madmin-go/support"
@@ -90,7 +88,21 @@ func (a adminAPIHandlers) SupportMetricsHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// m := GetSupportMetrics(ctx)
+	// Marshal API response
+	m := GetSupportMetrics()
+
+	jsonBytes, err := json.Marshal(m)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// Reply with storage information (across nodes in a
+	// distributed setup) as json.
+	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+func GetSupportMetrics() []Metric {
 	initMetrics()
 
 	peerCh := globalNotificationSys.GetClusterMetrics(GlobalContext)
@@ -105,40 +117,28 @@ func (a adminAPIHandlers) SupportMetricsHandler(w http.ResponseWriter, r *http.R
 	for metric := range peerCh {
 		m = append(m, metric)
 	}
-
-	fmt.Println("Length of metrics =", len(m))
-
-	// Marshal API response
-	jsonBytes, err := json.Marshal(m)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	// Reply with storage information (across nodes in a
-	// distributed setup) as json.
-	writeSuccessResponseJSON(w, jsonBytes)
+	return m
 }
 
-func GetSupportMetrics(ctx context.Context) support.Metrics {
-	state, _ := getBackgroundHealStatus(ctx, newObjectLayerFn())
+// func GetSupportMetrics(ctx context.Context) support.Metrics {
+// 	state, _ := getBackgroundHealStatus(ctx, newObjectLayerFn())
 
-	iostats := []support.IOStats{}
-	iostat := GetIOStats(ctx, globalLocalNodeName)
-	iostats = append(iostats, iostat)
-	peerIOStats := globalNotificationSys.GetIOStats(ctx)
-	for _, iostat = range peerIOStats {
-		iostats = append(iostats, iostat)
-	}
+// 	iostats := []support.IOStats{}
+// 	iostat := GetIOStats(ctx, globalLocalNodeName)
+// 	iostats = append(iostats, iostat)
+// 	peerIOStats := globalNotificationSys.GetIOStats(ctx)
+// 	for _, iostat = range peerIOStats {
+// 		iostats = append(iostats, iostat)
+// 	}
 
-	return support.Metrics{
-		Version:     madmin.SupportMetricsVersion,
-		TimeStamp:   time.Now(),
-		BgHealState: state,
-		IOStats:     iostats,
-		TLSInfo:     getTLSInfo(),
-	}
-}
+// 	return support.Metrics{
+// 		Version:     madmin.SupportMetricsVersion,
+// 		TimeStamp:   time.Now(),
+// 		BgHealState: state,
+// 		IOStats:     iostats,
+// 		TLSInfo:     getTLSInfo(),
+// 	}
+// }
 
 func GetIOStats(ctx context.Context, addr string) support.IOStats {
 	iostat := support.IOStats{

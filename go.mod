@@ -96,6 +96,7 @@ require (
 
 require (
 	cloud.google.com/go/iam v0.2.0 // indirect
+	github.com/mattn/go-ieproxy v0.0.1
 	github.com/nats-io/nats-streaming-server v0.24.1 // indirect
 	github.com/xdg/stringprep v1.0.0 // indirect
 )
