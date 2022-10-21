@@ -90,9 +90,9 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 
 			durationSecs := opts.duration.Seconds()
 
-			result.GETStats.ThroughputPerSec = throughputHighestGet / uint64(durationSecs)
+			result.GETStats.Throughput = throughputHighestGet / uint64(durationSecs)
 			result.GETStats.ObjectsPerSec = throughputHighestGet / uint64(opts.objectSize) / uint64(durationSecs)
-			result.PUTStats.ThroughputPerSec = throughputHighestPut / uint64(durationSecs)
+			result.PUTStats.Throughput = throughputHighestPut / uint64(durationSecs)
 			result.PUTStats.ObjectsPerSec = throughputHighestPut / uint64(opts.objectSize) / uint64(durationSecs)
 			var totalUploadTimes madmin.TimeDurations
 			var totalDownloadTimes madmin.TimeDurations
@@ -114,17 +114,17 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 				}
 
 				result.PUTStats.Servers = append(result.PUTStats.Servers, madmin.SpeedTestStatServer{
-					Endpoint:         throughputHighestResults[i].Endpoint,
-					ThroughputPerSec: throughputHighestResults[i].Uploads / uint64(durationSecs),
-					ObjectsPerSec:    throughputHighestResults[i].Uploads / uint64(opts.objectSize) / uint64(durationSecs),
-					Err:              errStr,
+					Endpoint:      throughputHighestResults[i].Endpoint,
+					Throughput:    throughputHighestResults[i].Uploads / uint64(durationSecs),
+					ObjectsPerSec: throughputHighestResults[i].Uploads / uint64(opts.objectSize) / uint64(durationSecs),
+					Err:           errStr,
 				})
 
 				result.GETStats.Servers = append(result.GETStats.Servers, madmin.SpeedTestStatServer{
-					Endpoint:         throughputHighestResults[i].Endpoint,
-					ThroughputPerSec: throughputHighestResults[i].Downloads / uint64(durationSecs),
-					ObjectsPerSec:    throughputHighestResults[i].Downloads / uint64(opts.objectSize) / uint64(durationSecs),
-					Err:              errStr,
+					Endpoint:      throughputHighestResults[i].Endpoint,
+					Throughput:    throughputHighestResults[i].Downloads / uint64(durationSecs),
+					ObjectsPerSec: throughputHighestResults[i].Downloads / uint64(opts.objectSize) / uint64(durationSecs),
+					Err:           errStr,
 				})
 
 				totalUploadTimes = append(totalUploadTimes, throughputHighestResults[i].UploadTimes...)
@@ -137,7 +137,7 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 			result.GETStats.TTFB = totalDownloadTTFB.Measure()
 
 			result.Size = opts.objectSize
-			result.Disks = globalEndpoints.NEndpoints()
+			result.Drives = globalEndpoints.NEndpoints()
 			result.Servers = len(globalNotificationSys.peerClients) + 1
 			result.Version = Version
 			result.Concurrent = concurrency
