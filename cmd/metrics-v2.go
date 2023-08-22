@@ -132,6 +132,9 @@ const (
 	capacityRawSubsystem      MetricSubsystem = "capacity_raw"
 	capacityUsableSubsystem   MetricSubsystem = "capacity_usable"
 	driveSubsystem            MetricSubsystem = "drive"
+	netSubsystem              MetricSubsystem = "net"
+	memSubsystem              MetricSubsystem = "mem"
+	cpuSubsystem              MetricSubsystem = "cpu_avg"
 	storageClassSubsystem     MetricSubsystem = "storage_class"
 	fileDescriptorSubsystem   MetricSubsystem = "file_descriptor"
 	goRoutines                MetricSubsystem = "go_routine"
@@ -539,12 +542,12 @@ func getNodeRRSParityMD() MetricDescription {
 	}
 }
 
-func getNodeDrivesFreeInodes() MetricDescription {
+func getNodeDrivesFreeInodesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      freeInodes,
-		Help:      "Total free inodes",
+		Help:      "Free inodes on a drive",
 		Type:      gaugeMetric,
 	}
 }
@@ -3207,7 +3210,7 @@ func getLocalStorageMetrics() *MetricsGroup {
 			})
 
 			metrics = append(metrics, Metric{
-				Description:    getNodeDrivesFreeInodes(),
+				Description:    getNodeDrivesFreeInodesMD(),
 				Value:          float64(disk.FreeInodes),
 				VariableLabels: map[string]string{"drive": disk.DrivePath},
 			})

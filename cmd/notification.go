@@ -783,6 +783,32 @@ func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType,
 	return reply
 }
 
+// GetResourceMetrics - Get metrics from all peers.
+func (sys *NotificationSys) GetResourceMetrics(ctx context.Context) []PeerResourceMetrics {
+	reply := make([]PeerResourceMetrics, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index].Metrics, err = sys.peerClients[index].GetResourceMetrics(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			reply[index].Errors = []string{err.Error()}
+		}
+	}
+	return reply
+}
+
 // GetSysConfig - Get information about system config
 // (only the config that are of concern to minio)
 func (sys *NotificationSys) GetSysConfig(ctx context.Context) []madmin.SysConfig {

@@ -49,7 +49,7 @@ require (
 	github.com/minio/dperf v0.5.0
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.2.0
-	github.com/minio/madmin-go/v3 v3.0.18
+	github.com/minio/madmin-go/v3 v3.0.19
 	github.com/minio/minio-go/v7 v7.0.63
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v2 v2.0.1
@@ -77,6 +77,7 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/rs/cors v1.10.0
 	github.com/secure-io/sio-go v0.3.1
+	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shirou/gopsutil/v3 v3.23.8
 	github.com/tidwall/gjson v1.16.0
 	github.com/tinylib/msgp v1.1.8
