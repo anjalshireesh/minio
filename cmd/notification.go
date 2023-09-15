@@ -1148,25 +1148,7 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 	return consolidatedReport
 }
 
-// GetBucketMetrics - gets the cluster level bucket metrics from all nodes excluding self.
-func (sys *NotificationSys) GetBucketMetrics(ctx context.Context) <-chan Metric {
-	if sys == nil {
-		return nil
-	}
-	g := errgroup.WithNErrs(len(sys.peerClients))
-	peerChannels := make([]<-chan Metric, len(sys.peerClients))
-	for index := range sys.peerClients {
-		index := index
-		g.Go(func() error {
-			if sys.peerClients[index] == nil {
-				return errPeerNotReachable
-			}
-			var err error
-			peerChannels[index], err = sys.peerClients[index].GetPeerBucketMetrics(ctx)
-			return err
-		}, index)
-	}
-
+func (sys *NotificationSys) collectPeerMetrics(ctx context.Context, peerChannels []<-chan Metric, g *errgroup.Group) <-chan Metric {
 	ch := make(chan Metric)
 	var wg sync.WaitGroup
 	for index, err := range g.Wait() {
@@ -1207,6 +1189,27 @@ func (sys *NotificationSys) GetBucketMetrics(ctx context.Context) <-chan Metric 
 	return ch
 }
 
+// GetBucketMetrics - gets the cluster level bucket metrics from all nodes excluding self.
+func (sys *NotificationSys) GetBucketMetrics(ctx context.Context) <-chan Metric {
+	if sys == nil {
+		return nil
+	}
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	peerChannels := make([]<-chan Metric, len(sys.peerClients))
+	for index := range sys.peerClients {
+		index := index
+		g.Go(func() error {
+			if sys.peerClients[index] == nil {
+				return errPeerNotReachable
+			}
+			var err error
+			peerChannels[index], err = sys.peerClients[index].GetPeerBucketMetrics(ctx)
+			return err
+		}, index)
+	}
+	return sys.collectPeerMetrics(ctx, peerChannels, g)
+}
+
 // GetClusterMetrics - gets the cluster metrics from all nodes excluding self.
 func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) <-chan Metric {
 	if sys == nil {
@@ -1225,45 +1228,7 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) <-chan Metric
 			return err
 		}, index)
 	}
-
-	ch := make(chan Metric)
-	var wg sync.WaitGroup
-	for index, err := range g.Wait() {
-		if err != nil {
-			if sys.peerClients[index] != nil {
-				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
-					sys.peerClients[index].host.String())
-				logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), err, sys.peerClients[index].host.String())
-			} else {
-				logger.LogOnceIf(ctx, err, "peer-offline")
-			}
-			continue
-		}
-		wg.Add(1)
-		go func(ctx context.Context, peerChannel <-chan Metric, wg *sync.WaitGroup) {
-			defer wg.Done()
-			for {
-				select {
-				case m, ok := <-peerChannel:
-					if !ok {
-						return
-					}
-					select {
-					case ch <- m:
-					case <-ctx.Done():
-						return
-					}
-				case <-ctx.Done():
-					return
-				}
-			}
-		}(ctx, peerChannels[index], &wg)
-	}
-	go func(wg *sync.WaitGroup, ch chan Metric) {
-		wg.Wait()
-		close(ch)
-	}(&wg, ch)
-	return ch
+	return sys.collectPeerMetrics(ctx, peerChannels, g)
 }
 
 // ServiceFreeze freezes all S3 API calls when 'freeze' is true,
