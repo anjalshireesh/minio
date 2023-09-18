@@ -35,12 +35,12 @@ const (
 	interfaceTxErrors MetricName = "if_tx_errors"
 
 	// memory stats
-	used      MetricName = "used"
-	free      MetricName = "free"
-	shared    MetricName = "shared"
-	buffers   MetricName = "buffers"
-	cached    MetricName = "cached"
-	available MetricName = "available"
+	memUsed      MetricName = "used"
+	memFree      MetricName = "free"
+	memShared    MetricName = "shared"
+	memBuffers   MetricName = "buffers"
+	memCache     MetricName = "cache"
+	memAvailable MetricName = "available"
 
 	// cpu stats
 	cpuUser   MetricName = "user"
@@ -105,12 +105,12 @@ func init() {
 		interfaceTxBytes:  "Bytes transmitted in " + interval,
 		interfaceTxErrors: "Transmit errors in " + interval,
 		total:             "Total memory on the node",
-		used:              "Used memory on the node",
-		free:              "Free memory on the node",
-		shared:            "Shared memory on the node",
-		buffers:           "Buffers memory on the node",
-		cached:            "Cached memory on the node",
-		available:         "Available memory on the node",
+		memUsed:           "Used memory on the node",
+		memFree:           "Free memory on the node",
+		memShared:         "Shared memory on the node",
+		memBuffers:        "Buffers memory on the node",
+		memCache:          "Cache memory on the node",
+		memAvailable:      "Available memory on the node",
 		readsPerSec:       "Reads per second on a drive",
 		writesPerSec:      "Writes per second on a drive",
 		readKBPerSec:      "Kilobytes read per second on a drive",
@@ -220,63 +220,60 @@ func collectDriveMetrics(m madmin.RealtimeMetrics) {
 		updateResourceMetrics(driveSubsystem, percUtil, float64(stats.TotalTicks)/float64(upt*10), labels, false)
 	}
 
-	objLayer := newObjectLayerFn()
-	// Service not initialized yet
-	if objLayer == nil {
-		return
-	}
-	storageInfo := objLayer.StorageInfo(GlobalContext)
-
-	for _, disk := range storageInfo.Disks {
-		labels := map[string]string{"drive": disk.Endpoint}
-		updateResourceMetrics(driveSubsystem, usedBytes, float64(disk.UsedSpace), labels, false)
-		updateResourceMetrics(driveSubsystem, totalBytes, float64(disk.TotalSpace), labels, false)
-		updateResourceMetrics(driveSubsystem, usedInodes, float64(disk.UsedInodes), labels, false)
-		updateResourceMetrics(driveSubsystem, totalInodes, float64(disk.FreeInodes+disk.UsedInodes), labels, false)
+	for _, d := range globalLocalDrives {
+		labels := map[string]string{"drive": d.Endpoint().RawPath}
+		di, err := d.DiskInfo(GlobalContext, false)
+		if err == nil {
+			updateResourceMetrics(driveSubsystem, usedBytes, float64(di.Used), labels, false)
+			updateResourceMetrics(driveSubsystem, totalBytes, float64(di.Total), labels, false)
+			updateResourceMetrics(driveSubsystem, usedInodes, float64(di.UsedInodes), labels, false)
+			updateResourceMetrics(driveSubsystem, totalInodes, float64(di.FreeInodes+di.UsedInodes), labels, false)
+		}
 	}
 }
 
 func collectLocalResourceMetrics() {
 	var types madmin.MetricType = madmin.MetricsDisk | madmin.MetricNet | madmin.MetricsMem | madmin.MetricsCPU
 
-	hostsMap := map[string]struct{}{}
-	hostsMap[globalLocalNodeName] = struct{}{}
 	m := collectLocalMetrics(types, collectMetricsOpts{
-		hosts: hostsMap,
+		hosts: map[string]struct{}{
+			globalLocalNodeName: {},
+		},
 	})
 
 	for host, hm := range m.ByHost {
 		if len(host) > 0 {
-			labels := map[string]string{}
 			if hm.Net != nil && len(hm.Net.NetStats.Name) > 0 {
 				stats := hm.Net.NetStats
-				labels["interface"] = stats.Name
+				labels := map[string]string{"inerface": stats.Name}
 				updateResourceMetrics(netSubsystem, interfaceRxBytes, float64(stats.RxBytes), labels, true)
 				updateResourceMetrics(netSubsystem, interfaceRxErrors, float64(stats.RxErrors), labels, true)
 				updateResourceMetrics(netSubsystem, interfaceTxBytes, float64(stats.TxBytes), labels, true)
 				updateResourceMetrics(netSubsystem, interfaceTxErrors, float64(stats.TxErrors), labels, true)
 			}
 			if hm.Mem != nil && len(hm.Mem.Info.Addr) > 0 {
+				labels := map[string]string{}
 				stats := hm.Mem.Info
 				updateResourceMetrics(memSubsystem, total, float64(stats.Total), labels, false)
-				updateResourceMetrics(memSubsystem, used, float64(stats.Used), labels, false)
-				updateResourceMetrics(memSubsystem, free, float64(stats.Free), labels, false)
-				updateResourceMetrics(memSubsystem, shared, float64(stats.Shared), labels, false)
-				updateResourceMetrics(memSubsystem, buffers, float64(stats.Buffers), labels, false)
-				updateResourceMetrics(memSubsystem, available, float64(stats.Available), labels, false)
-				updateResourceMetrics(memSubsystem, cached, float64(stats.Cache), labels, false)
+				updateResourceMetrics(memSubsystem, memUsed, float64(stats.Used), labels, false)
+				updateResourceMetrics(memSubsystem, memFree, float64(stats.Free), labels, false)
+				updateResourceMetrics(memSubsystem, memShared, float64(stats.Shared), labels, false)
+				updateResourceMetrics(memSubsystem, memBuffers, float64(stats.Buffers), labels, false)
+				updateResourceMetrics(memSubsystem, memAvailable, float64(stats.Available), labels, false)
+				updateResourceMetrics(memSubsystem, memCache, float64(stats.Cache), labels, false)
 			}
 			if hm.CPU != nil {
+				labels := map[string]string{}
 				ts := hm.CPU.TimesStat
 				if ts != nil {
 					tot := ts.User + ts.System + ts.Idle + ts.Iowait
-					cpuUserVal := math.Round(float64(ts.User)/float64(tot)*100*100) / 100
+					cpuUserVal := math.Round(ts.User/tot*100*100) / 100
 					updateResourceMetrics(cpuSubsystem, cpuUser, cpuUserVal, labels, false)
-					cpuSystemVal := math.Round(float64(ts.System)/float64(tot)*100*100) / 100
+					cpuSystemVal := math.Round(ts.System/tot*100*100) / 100
 					updateResourceMetrics(cpuSubsystem, cpuSystem, cpuSystemVal, labels, false)
-					cpuIdleVal := math.Round(float64(ts.Idle)/float64(tot)*100*100) / 100
+					cpuIdleVal := math.Round(ts.Idle/tot*100*100) / 100
 					updateResourceMetrics(cpuSubsystem, cpuIdle, cpuIdleVal, labels, false)
-					cpuIOWaitVal := math.Round(float64(ts.Iowait)/float64(tot)*100*100) / 100
+					cpuIOWaitVal := math.Round(ts.Iowait/tot*100*100) / 100
 					updateResourceMetrics(cpuSubsystem, cpuIOWait, cpuIOWaitVal, labels, false)
 				}
 				ls := hm.CPU.LoadStat
@@ -295,7 +292,7 @@ func collectLocalResourceMetrics() {
 
 // startResourceMetricsCollection - starts the job for collecting resource metrics
 func startResourceMetricsCollection() {
-	resourceMetricsMap = make(map[MetricSubsystem]ResourceMetrics)
+	resourceMetricsMap = map[MetricSubsystem]ResourceMetrics{}
 	metricsTimer := time.NewTimer(resourceMetricsCollectionInterval)
 
 	collectLocalResourceMetrics()
@@ -355,37 +352,39 @@ func newMinioResourceCollector(metricsGroups []*MetricsGroup) *minioResourceColl
 	}
 }
 
-func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem) []Metric {
+func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAvgMax bool) []Metric {
 	help := resourceMetricsHelpMap[rm.Name]
 	name := rm.Name
 
 	metrics := []Metric{}
 	metrics = append(metrics, Metric{
-		Description:    getNodeMetricDescription(subSys, name, help),
+		Description:    getResourceMetricDescription(subSys, name, help),
 		Value:          rm.Current,
 		VariableLabels: rm.Labels,
 	})
 
-	avgName := MetricName(fmt.Sprintf("%s_avg", name))
-	avgHelp := fmt.Sprintf("%s (avg)", help)
-	metrics = append(metrics, Metric{
-		Description:    getNodeMetricDescription(subSys, avgName, avgHelp),
-		Value:          math.Round(rm.Avg*100) / 100,
-		VariableLabels: rm.Labels,
-	})
+	if requireAvgMax {
+		avgName := MetricName(fmt.Sprintf("%s_avg", name))
+		avgHelp := fmt.Sprintf("%s (avg)", help)
+		metrics = append(metrics, Metric{
+			Description:    getResourceMetricDescription(subSys, avgName, avgHelp),
+			Value:          math.Round(rm.Avg*100) / 100,
+			VariableLabels: rm.Labels,
+		})
 
-	maxName := MetricName(fmt.Sprintf("%s_max", name))
-	maxHelp := fmt.Sprintf("%s (max)", help)
-	metrics = append(metrics, Metric{
-		Description:    getNodeMetricDescription(subSys, maxName, maxHelp),
-		Value:          rm.Max,
-		VariableLabels: rm.Labels,
-	})
+		maxName := MetricName(fmt.Sprintf("%s_max", name))
+		maxHelp := fmt.Sprintf("%s (max)", help)
+		metrics = append(metrics, Metric{
+			Description:    getResourceMetricDescription(subSys, maxName, maxHelp),
+			Value:          rm.Max,
+			VariableLabels: rm.Labels,
+		})
+	}
 
 	return metrics
 }
 
-func getNodeMetricDescription(subSys MetricSubsystem, name MetricName, help string) MetricDescription {
+func getResourceMetricDescription(subSys MetricSubsystem, name MetricName, help string) MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
 		Subsystem: subSys,
@@ -395,28 +394,28 @@ func getNodeMetricDescription(subSys MetricSubsystem, name MetricName, help stri
 	}
 }
 
-func getResourceMetricsFromCache(metricsCache map[MetricSubsystem]ResourceMetrics) (metrics []Metric) {
-	metrics = make([]Metric, 0, 50)
-
-	subSystems := []MetricSubsystem{netSubsystem, memSubsystem, driveSubsystem, cpuSubsystem}
-	for _, subSys := range subSystems {
-		stats, found := metricsCache[subSys]
-		if found {
-			for _, m := range stats {
-				metrics = append(metrics, prepareResourceMetrics(m, subSys)...)
-			}
-		}
-	}
-
-	return metrics
-}
-
 func getResourceMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: resourceMetricsCacheInterval,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		return getResourceMetricsFromCache(resourceMetricsMap)
+		metrics := make([]Metric, 0, 50)
+
+		subSystems := []MetricSubsystem{netSubsystem, memSubsystem, driveSubsystem, cpuSubsystem}
+		for _, subSys := range subSystems {
+			stats, found := resourceMetricsMap[subSys]
+			if found {
+				requireAvgMax := true
+				if subSys == driveSubsystem {
+					requireAvgMax = false
+				}
+				for _, m := range stats {
+					metrics = append(metrics, prepareResourceMetrics(m, subSys, requireAvgMax)...)
+				}
+			}
+		}
+
+		return metrics
 	})
 	return mg
 }
