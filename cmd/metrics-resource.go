@@ -2,18 +2,14 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"net/http"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/mcontext"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/expfmt"
 	"github.com/shirou/gopsutil/v3/host"
 )
 
@@ -62,6 +58,7 @@ var (
 	resourceMetricsMap map[MetricSubsystem]ResourceMetrics
 	// resourceMetricsHelpMap maps metric name to its help string
 	resourceMetricsHelpMap map[MetricName]string
+	resourceMetricsGroups  []*MetricsGroup
 )
 
 // PeerResourceMetrics represents the resource metrics
@@ -133,7 +130,7 @@ func init() {
 		cpuLoad5:          "CPU load average 5min",
 		cpuLoad15:         "CPU load average 15min",
 	}
-	resourceMetricsGroups := []*MetricsGroup{
+	resourceMetricsGroups = []*MetricsGroup{
 		getResourceMetrics(),
 	}
 
@@ -148,7 +145,7 @@ func updateResourceMetrics(subSys MetricSubsystem, name MetricName, val float64,
 	}
 
 	// labels are used to uniquely identify a metric
-	// e.g. readsPerSec -> node + drive
+	// e.g. reads_per_sec_{drive} inside the map
 	sfx := ""
 	for _, v := range labels {
 		if len(sfx) > 0 {
@@ -191,16 +188,9 @@ func collectDriveMetrics(m madmin.RealtimeMetrics) {
 	kib := 1 << 10
 	sectorSize := uint64(512)
 
-	node := globalMinioAddr
-	// these are only local metrics; so pick node from the first host
-	for h := range m.ByHost {
-		node = h
-		break
-	}
-
 	for d, dm := range m.ByDisk {
 		stats := dm.IOStats
-		labels := map[string]string{"drive": d, "node": node}
+		labels := map[string]string{"drive": d}
 		updateResourceMetrics(driveSubsystem, readsPerSec, float64(stats.ReadIOs)/float64(upt), labels, false)
 
 		readBytes := stats.ReadSectors * sectorSize
@@ -238,7 +228,7 @@ func collectDriveMetrics(m madmin.RealtimeMetrics) {
 	storageInfo := objLayer.StorageInfo(GlobalContext)
 
 	for _, disk := range storageInfo.Disks {
-		labels := map[string]string{"drive": disk.Endpoint, "node": node}
+		labels := map[string]string{"drive": disk.Endpoint}
 		updateResourceMetrics(driveSubsystem, usedBytes, float64(disk.UsedSpace), labels, false)
 		updateResourceMetrics(driveSubsystem, totalBytes, float64(disk.TotalSpace), labels, false)
 		updateResourceMetrics(driveSubsystem, usedInodes, float64(disk.UsedInodes), labels, false)
@@ -257,7 +247,7 @@ func collectLocalResourceMetrics() {
 
 	for host, hm := range m.ByHost {
 		if len(host) > 0 {
-			labels := map[string]string{"node": host}
+			labels := map[string]string{}
 			if hm.Net != nil && len(hm.Net.NetStats.Name) > 0 {
 				stats := hm.Net.NetStats
 				labels["interface"] = stats.Name
@@ -303,16 +293,6 @@ func collectLocalResourceMetrics() {
 	collectDriveMetrics(m)
 }
 
-func collectRemoteResourceMetrics(ctx context.Context) []PeerResourceMetrics {
-	m := []PeerResourceMetrics{}
-
-	if !globalIsDistErasure {
-		return m
-	}
-
-	return globalNotificationSys.GetResourceMetrics(ctx)
-}
-
 // startResourceMetricsCollection - starts the job for collecting resource metrics
 func startResourceMetricsCollection() {
 	resourceMetricsMap = make(map[MetricSubsystem]ResourceMetrics)
@@ -347,56 +327,21 @@ func (c *minioResourceCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 // Collect is called by the Prometheus registry when collecting metrics.
-func (c *minioResourceCollector) Collect(ch chan<- prometheus.Metric) {
-	// Expose MinIO's version information
-	minioVersionInfo.WithLabelValues(Version, CommitID).Set(1.0)
-
-	populateAndPublish(c.metricsGroups, func(metric Metric) bool {
-		labels, values := getOrderedLabelValueArrays(metric.VariableLabels)
-		values = append(values, globalLocalNodeName)
-		labels = append(labels, serverName)
-
-		if metric.Description.Type == histogramMetric {
-			if metric.Histogram == nil {
-				return true
-			}
-			for k, v := range metric.Histogram {
-				labels = append(labels, metric.HistogramBucketLabel)
-				values = append(values, k)
-				ch <- prometheus.MustNewConstMetric(
-					prometheus.NewDesc(
-						prometheus.BuildFQName(string(metric.Description.Namespace),
-							string(metric.Description.Subsystem),
-							string(metric.Description.Name)),
-						metric.Description.Help,
-						labels,
-						metric.StaticLabels,
-					),
-					prometheus.GaugeValue,
-					float64(v),
-					values...)
-			}
-			return true
+func (c *minioResourceCollector) Collect(out chan<- prometheus.Metric) {
+	var wg sync.WaitGroup
+	publish := func(in <-chan Metric) {
+		defer wg.Done()
+		for metric := range in {
+			labels, values := getOrderedLabelValueArrays(metric.VariableLabels)
+			collectMetric(metric, labels, values, "resource", out)
 		}
+	}
 
-		metricType := prometheus.GaugeValue
-		if metric.Description.Type == counterMetric {
-			metricType = prometheus.CounterValue
-		}
-		ch <- prometheus.MustNewConstMetric(
-			prometheus.NewDesc(
-				prometheus.BuildFQName(string(metric.Description.Namespace),
-					string(metric.Description.Subsystem),
-					string(metric.Description.Name)),
-				metric.Description.Help,
-				labels,
-				metric.StaticLabels,
-			),
-			metricType,
-			metric.Value,
-			values...)
-		return true
-	})
+	// Call peer api to fetch metrics
+	wg.Add(2)
+	go publish(ReportMetrics(GlobalContext, c.metricsGroups))
+	go publish(globalNotificationSys.GetResourceMetrics(GlobalContext))
+	wg.Wait()
 }
 
 // newMinioResourceCollector describes the collector
@@ -407,16 +352,6 @@ func newMinioResourceCollector(metricsGroups []*MetricsGroup) *minioResourceColl
 	return &minioResourceCollector{
 		metricsGroups: metricsGroups,
 		desc:          prometheus.NewDesc("minio_resource_stats", "Resource statistics exposed by MinIO server", nil, nil),
-	}
-}
-
-func getNodeCPUStatSystem() MetricDescription {
-	return MetricDescription{
-		Namespace: nodeMetricNamespace,
-		Subsystem: cpuSubsystem,
-		Name:      cpuSystem,
-		Help:      "CPU system time",
-		Type:      gaugeMetric,
 	}
 }
 
@@ -480,63 +415,13 @@ func getResourceMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: resourceMetricsCacheInterval,
 	}
-	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		metrics = make([]Metric, 0, 50)
-		metrics = append(metrics, getResourceMetricsFromCache(resourceMetricsMap)...)
-
-		cctx, cancel := context.WithTimeout(ctx, time.Second/2)
-		remoteMetrics := collectRemoteResourceMetrics(cctx)
-		cancel()
-
-		for _, rm := range remoteMetrics {
-			if len(rm.Errors) == 0 {
-				metrics = append(metrics, getResourceMetricsFromCache(rm.Metrics)...)
-			} else {
-				err := errors.New("error fetching metrics from remote server: " + strings.Join(rm.Errors, ","))
-				logger.LogIf(ctx, err)
-			}
-		}
-		return
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		return getResourceMetricsFromCache(resourceMetricsMap)
 	})
 	return mg
 }
 
 // metricsHandler is the prometheus handler for resource metrics
 func metricsResourceHandler() http.Handler {
-	registry := prometheus.NewRegistry()
-
-	logger.CriticalIf(GlobalContext, registry.Register(resourceCollector))
-	gatherers := prometheus.Gatherers{
-		registry,
-	}
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
-		if ok {
-			tc.FuncName = "handler.MetricsResource"
-			tc.ResponseRecorder.LogErrBody = true
-		}
-
-		mfs, err := gatherers.Gather()
-		if err != nil {
-			if len(mfs) == 0 {
-				writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
-				return
-			}
-		}
-
-		contentType := expfmt.Negotiate(r.Header)
-		w.Header().Set("Content-Type", string(contentType))
-
-		enc := expfmt.NewEncoder(w, contentType)
-		for _, mf := range mfs {
-			if err := enc.Encode(mf); err != nil {
-				logger.LogIf(r.Context(), err)
-				return
-			}
-		}
-		if closer, ok := enc.(expfmt.Closer); ok {
-			closer.Close()
-		}
-	})
+	return metricsHttpHandler(resourceCollector, "handler.MetricsResource")
 }

@@ -229,15 +229,31 @@ func (client *peerRESTClient) GetMetrics(ctx context.Context, t madmin.MetricTyp
 	return info, err
 }
 
-// GetResourceMetrics - fetch resource metrics from a remote node.
-func (client *peerRESTClient) GetResourceMetrics(ctx context.Context) (info map[MetricSubsystem]ResourceMetrics, err error) {
+func (client *peerRESTClient) GetResourceMetrics(ctx context.Context) (<-chan Metric, error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodResourceMetrics, nil, nil, -1)
 	if err != nil {
-		return
+		return nil, err
 	}
-	defer xhttp.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&info)
-	return info, err
+	dec := gob.NewDecoder(respBody)
+	ch := make(chan Metric)
+	go func(ch chan<- Metric) {
+		defer func() {
+			xhttp.DrainBody(respBody)
+			close(ch)
+		}()
+		for {
+			var metric Metric
+			if err := dec.Decode(&metric); err != nil {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- metric:
+			}
+		}
+	}(ch)
+	return ch, nil
 }
 
 // GetProcInfo - fetch MinIO process information for a remote node.

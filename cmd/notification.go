@@ -783,30 +783,25 @@ func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType,
 	return reply
 }
 
-// GetResourceMetrics - Get metrics from all peers.
-func (sys *NotificationSys) GetResourceMetrics(ctx context.Context) []PeerResourceMetrics {
-	reply := make([]PeerResourceMetrics, len(sys.peerClients))
-
+// GetResourceMetrics - gets the resource metrics from all nodes excluding self.
+func (sys *NotificationSys) GetResourceMetrics(ctx context.Context) <-chan Metric {
+	if sys == nil {
+		return nil
+	}
 	g := errgroup.WithNErrs(len(sys.peerClients))
-	for index, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-
+	peerChannels := make([]<-chan Metric, len(sys.peerClients))
+	for index := range sys.peerClients {
 		index := index
 		g.Go(func() error {
+			if sys.peerClients[index] == nil {
+				return errPeerNotReachable
+			}
 			var err error
-			reply[index].Metrics, err = sys.peerClients[index].GetResourceMetrics(ctx)
+			peerChannels[index], err = sys.peerClients[index].GetResourceMetrics(ctx)
 			return err
 		}, index)
 	}
-
-	for index, err := range g.Wait() {
-		if err != nil {
-			reply[index].Errors = []string{err.Error()}
-		}
-	}
-	return reply
+	return sys.collectPeerMetrics(ctx, peerChannels, g)
 }
 
 // GetSysConfig - Get information about system config

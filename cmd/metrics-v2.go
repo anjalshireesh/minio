@@ -3549,23 +3549,6 @@ func getKMSMetrics() *MetricsGroup {
 	return mg
 }
 
-type minioBucketCollector struct {
-	metricsGroups []*MetricsGroup
-	desc          *prometheus.Desc
-}
-
-func newMinioBucketCollector(metricsGroups []*MetricsGroup) *minioBucketCollector {
-	return &minioBucketCollector{
-		metricsGroups: metricsGroups,
-		desc:          prometheus.NewDesc("minio_bucket_stats", "Statistics exposed by MinIO server cluster wide per bucket", nil, nil),
-	}
-}
-
-// Describe sends the super-set of all possible descriptors of metrics
-func (c *minioBucketCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.desc
-}
-
 func collectMetric(metric Metric, labels []string, values []string, metricName string, out chan<- prometheus.Metric) {
 	if metric.Description.Type == histogramMetric {
 		if metric.Histogram == nil {
@@ -3614,6 +3597,23 @@ func collectMetric(metric Metric, labels []string, values []string, metricName s
 		out <- pmetric
 	}
 
+}
+
+type minioBucketCollector struct {
+	metricsGroups []*MetricsGroup
+	desc          *prometheus.Desc
+}
+
+func newMinioBucketCollector(metricsGroups []*MetricsGroup) *minioBucketCollector {
+	return &minioBucketCollector{
+		metricsGroups: metricsGroups,
+		desc:          prometheus.NewDesc("minio_bucket_stats", "Statistics exposed by MinIO server cluster wide per bucket", nil, nil),
+	}
+}
+
+// Describe sends the super-set of all possible descriptors of metrics
+func (c *minioBucketCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.desc
 }
 
 // Collect is called by the Prometheus registry when collecting metrics.
@@ -3791,11 +3791,11 @@ func newMinioCollectorNode(metricsGroups []*MetricsGroup) *minioNodeCollector {
 	}
 }
 
-func metricsBucketHandler() http.Handler {
+func metricsHttpHandler(c prometheus.Collector, funcName string) http.Handler {
 	registry := prometheus.NewRegistry()
 
 	// Report all other metrics
-	logger.CriticalIf(GlobalContext, registry.Register(bucketCollector))
+	logger.CriticalIf(GlobalContext, registry.Register(c))
 
 	// DefaultGatherers include golang metrics and process metrics.
 	gatherers := prometheus.Gatherers{
@@ -3805,7 +3805,7 @@ func metricsBucketHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 		if ok {
-			tc.FuncName = "handler.MetricsBucket"
+			tc.FuncName = funcName
 			tc.ResponseRecorder.LogErrBody = true
 		}
 
@@ -3832,6 +3832,10 @@ func metricsBucketHandler() http.Handler {
 			closer.Close()
 		}
 	})
+}
+
+func metricsBucketHandler() http.Handler {
+	return metricsHttpHandler(bucketCollector, "handler.MetricsBucket")
 }
 
 func metricsServerHandler() http.Handler {
