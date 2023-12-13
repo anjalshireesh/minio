@@ -2262,6 +2262,8 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		// 5 - number sequence for drives
 		// 6 - drive suffix
 		re = regexp.MustCompile(`([^\s^{]*)({\d+...\d+})?([^\s^{^/]*)(/[^\s^{]*)({\d+...\d+})?([^\s]*)`)
+		// ([^\s^{]*)(\{\d+\.\.\.\d+\})?([^\s^{^/]*)(\{\d+\.\.\.\d+\})?([^\s^{^/]*)(\{\d+\.\.\.\d+\})?([^\s]*)
+		// ([^\s^{]*)(\{\d+\.\.\.\d+\})?([^\s^{^/]*)(\{\d+\.\.\.\d+\})?([^\s^{^/]*)(\{\d+\.\.\.\d+\})?([^\s^{]*)([^\s]*)
 		poolsMatches := re.FindAllStringSubmatch(poolsArgs, -1)
 
 		anonPools = make([]string, len(poolsMatches))
