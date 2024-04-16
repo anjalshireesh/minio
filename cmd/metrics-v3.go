@@ -42,6 +42,7 @@ const (
 	clusterUsageObjectsCollectorPath collectorPath = "/cluster/usage/objects"
 	clusterUsageBucketsCollectorPath collectorPath = "/cluster/usage/buckets"
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
+	clusterReplicationCollectorPath  collectorPath = "/cluster/replication"
 )
 
 const (
@@ -203,6 +204,25 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterErasureSetMetrics,
 	)
 
+	clusterReplicationMG := NewMetricsGroup(clusterReplicationCollectorPath,
+		[]MetricDescriptor{
+			replicationAverageActiveWorkersMD,
+			replicationAverageQueuedBytesMD,
+			replicationAverageQueuedCountMD,
+			replicationAverageTransferRateMD,
+			replicationCurrentActiveWorkersMD,
+			replicationCurrentTransferRateMD,
+			replicationLastMinuteQueuedBytesMD,
+			replicationLastMinuteQueuedCountMD,
+			replicationMaxActiveWorkersMD,
+			replicationMaxQueuedBytesMD,
+			replicationMaxQueuedCountMD,
+			replicationMaxTransferRateMD,
+			replicationRecentBacklogCountMD,
+		},
+		loadClusterReplicationMetrics,
+	)
+
 	allMetricGroups := []*MetricsGroup{
 		apiRequestsMG,
 		apiBucketMG,
@@ -214,6 +234,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		clusterUsageObjectsMG,
 		clusterUsageBucketsMG,
 		clusterErasureSetMG,
+		clusterReplicationMG,
 	}
 
 	// Bucket metrics are special, they always include the bucket label. These
